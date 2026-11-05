@@ -1,0 +1,35 @@
+# Source-only optimization; target-selected exploration.
+seed: 3444
+sampling_seed: 3444
+batch: 192
+steps: 6000
+warmup: 125
+lr: 0.0003
+min_lr: 1.0e-05
+smoothing: 0.3333333333333333
+class_balance: true
+augmentation: "standard"
+precision: "bf16"
+eval_every: 0
+eval_points: null
+stop_oa: null
+benchmark: "pointda"
+target: "modelnet"
+sources: ["shapenet", "scannet"]
+model:
+  NAME: "PointVRWKV"
+  num_tokens: 256
+  group_size: 32
+  embed_dim: 192
+  num_heads: 3
+  depth: 12
+  hidden_rate: 4
+  order: "six_axis_snake"
+  recompute: true
+  num_classes: 10
+dataset:
+  NAME: "SourceStream"
+optimizer:
+  NAME: "adamw"
+  weight_decay: 0.05
+  filter_bias_and_bn: true
