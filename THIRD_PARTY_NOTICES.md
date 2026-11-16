@@ -1,5 +1,15 @@
 # Third-party notices
 
+`openpoints/cpp/cuda/bi_wkv` uses the original normalized Bi-WKV from
+OpenGVLab/Vision-RWKV `classification/mmcls_custom/models/backbones/cuda_new`
+at commit 0e0e38a6fd4475ae3817e14420ab85fab08d9097. Local adaptations replace deprecated `k.type()` dispatch with `k.scalar_type()`,
+correct split-summary distance-minus-one offsets and self-term derivatives, and
+use synchronized shared-memory gathering in forward (as in the upstream legacy
+kernel). The implementation targets the original normalized exponential formula;
+it is not byte-identical to upstream CUDA. `openpoints/models/spatial_mix.py` adapts the corresponding `vrwkv.py`
+SpatialMix, substituting the existing 3D Q-Shift for image-grid Q-Shift.
+The upstream Apache-2.0 license is included alongside the kernel.
+
 `openpoints/cpp/cuda/wkv6/wkv6_op.cpp` and `wkv6_cuda.cu` are retained from Vision-RWKV,
 commit 0e0e38a6fd4475ae3817e14420ab85fab08d9097. The original Apache-2.0
 license is supplied alongside these files as `openpoints/cpp/cuda/wkv6/LICENSE`.

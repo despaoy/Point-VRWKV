@@ -7,4 +7,9 @@ export MAX_JOBS="${MAX_JOBS:-2}"
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 target="$1"; root="$2"; output="$3"
 shift 3
-python examples/classification/main.py --cfg "cfgs/pointda/$target.yaml" --data-root "$root" --output "$output" "$@"
+case "${POINT_VRWKV_OPERATOR:-wkv6}" in
+  wkv6) config="cfgs/pointda/$target.yaml" ;;
+  bi_wkv) config="cfgs/bi_wkv/pointda/$target.yaml" ;;
+  *) printf '%s\n' 'POINT_VRWKV_OPERATOR must be wkv6 or bi_wkv' >&2; exit 2 ;;
+esac
+python examples/classification/main.py --cfg "$config" --data-root "$root" --output "$output" "$@"

@@ -8,6 +8,7 @@ from openpoints.utils import EasyConfig
 from .build import MODELS
 from .tokenizer import PointPatchTokenizer
 from .qshift import directional_qshift, plan_directional_donors, remap_directional_donors
+from .spatial_mix import PointSpatialMix
 from .serialization import AXIS_ORDERS, gather_tokens, morton_permutation, serialize
 
 class PointSpatialMixV6(nn.Module):
@@ -108,16 +109,17 @@ class PointChannelMixV6(nn.Module):
         value = self.value(key)
         return torch.sigmoid(self.receptance(receptance_input)) * value
 
-class PointVRWKV6Block(nn.Module):
+class PointVRWKVBlock(nn.Module):
 
-    def __init__(self, embed_dim: int, num_heads: int, depth: int, layer_id: int, hidden_rate: int) -> None:
+    def __init__(self, embed_dim: int, num_heads: int, depth: int, layer_id: int, hidden_rate: int, operator: str) -> None:
         super().__init__()
         self.layer_id = layer_id
         self.ln1 = nn.LayerNorm(embed_dim)
         self.ln2 = nn.LayerNorm(embed_dim)
         if layer_id == 0:
             self.ln0 = nn.LayerNorm(embed_dim)
-        self.att = PointSpatialMixV6(embed_dim, num_heads, depth, layer_id)
+        self.att = (PointSpatialMix(embed_dim, depth, layer_id) if operator == 'bi_wkv'
+                    else PointSpatialMixV6(embed_dim, num_heads, depth, layer_id))
         self.ffn = PointChannelMixV6(embed_dim, depth, layer_id, hidden_rate)
 
     def forward(self, tokens: torch.Tensor, donors: torch.Tensor) -> torch.Tensor:
@@ -132,19 +134,24 @@ class PointVRWKV6Block(nn.Module):
 class PointVRWKV(nn.Module):
 
     def __init__(self, num_classes, num_tokens, group_size, embed_dim, num_heads,
-                 depth, hidden_rate, order, recompute) -> None:
+                 depth, hidden_rate, order, recompute, operator='wkv6') -> None:
         super().__init__()
         config = EasyConfig()
         config.update(dict(num_classes=num_classes, num_tokens=num_tokens,
                            group_size=group_size, embed_dim=embed_dim, num_heads=num_heads,
-                           depth=depth, hidden_rate=hidden_rate, order=order, recompute=recompute))
+                           depth=depth, hidden_rate=hidden_rate, order=order, recompute=recompute,
+                           operator=operator))
         self.config = config
         if config.num_heads < 1 or config.embed_dim != config.num_heads*64:
             raise ValueError('The WKV6 kernel uses 64 channels per head')
         if not 3 <= config.num_tokens <= 256 or config.depth < 1:
             raise ValueError('Expected 3..256 tokens and positive depth')
+        if operator not in ('bi_wkv', 'wkv6'):
+            raise ValueError('operator must be bi_wkv or wkv6')
+        if operator == 'bi_wkv' and config.num_tokens % 32:
+            raise ValueError('Original Bi-WKV CUDA requires token count divisible by 32')
         self.tokenizer = PointPatchTokenizer(config.num_tokens, config.group_size, config.embed_dim)
-        self.layers = nn.ModuleList([PointVRWKV6Block(config.embed_dim, config.num_heads, config.depth, layer_id, config.hidden_rate) for layer_id in range(config.depth)])
+        self.layers = nn.ModuleList([PointVRWKVBlock(config.embed_dim, config.num_heads, config.depth, layer_id, config.hidden_rate, operator) for layer_id in range(config.depth)])
         self.ln1 = nn.LayerNorm(config.embed_dim)
         self.head = nn.Linear(config.embed_dim, config.num_classes)
         self.apply(self._initialize_module)
